@@ -24,10 +24,10 @@ def main():
     scheduler = BlockingScheduler(timezone="Europe/Paris")
 
     scheduler.add_job(
-        velib_fetcher.run(),
+        velib_fetcher.run,
         trigger="interval",
         minutes=settings.fetch_interval_minutes,
-        next_run=datetime.now(),
+        next_run_time=datetime.now(),
         id="velib_fetcher",
         name="Vélib Fetcher",
         max_instances=1,
@@ -35,10 +35,10 @@ def main():
     )
 
     scheduler.add_job(
-        meteo_fetcher.run(),
+        meteo_fetcher.run,
         trigger="interval",
         minutes=settings.fetch_interval_minutes,
-        next_run=datetime.now(),
+        next_run_time=datetime.now(),
         id="meteo_fetcher",
         name="Meteo Fetcher",
         max_instances=1,

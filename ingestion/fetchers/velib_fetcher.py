@@ -127,7 +127,7 @@ class VelibFetcher:
         """Insère les stations dans bronze.velib_stations, retourne le nombre de lignes insérées."""
         conn = self._get_conn()
         inserted = 0
-        with conn.cursor() as cur:
+        with conn, conn.cursor() as cur:
             for station in stations:
                 cur.execute(
                     """
@@ -148,5 +148,4 @@ class VelibFetcher:
                     station,
                 )
                 inserted += cur.rowcount
-        conn.commit()
         return inserted

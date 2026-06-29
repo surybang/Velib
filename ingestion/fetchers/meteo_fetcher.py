@@ -108,7 +108,7 @@ class MeteoFetcher:
     def _insert_weather(self, weather: dict) -> bool:
         """Insère une mesure météo, retourne True si insérée (False si doublon)."""
         conn = self._get_conn()
-        with conn.cursor() as cur:
+        with conn, conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO bronze.meteo_paris (
@@ -127,5 +127,4 @@ class MeteoFetcher:
                 weather,
             )
             inserted = cur.rowcount > 0
-        conn.commit()
         return inserted
