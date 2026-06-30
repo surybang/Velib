@@ -83,7 +83,7 @@ class MeteoFetcher:
 
     def _fetch_current_weather(self) -> dict | None:
         with httpx.Client(timeout=30.0) as client:
-            response = client.get(settings.meteo_api_url)
+            response = client.get(settings.meteo_api_base_url)
             response.raise_for_status()
             data = response.json()
 
