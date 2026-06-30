@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS bronze.meteo_paris (
     id BIGSERIAL PRIMARY KEY,
     measured_at TIMESTAMPTZ NOT NULL,
     temperature_2m REAL,
-    realative_humity_2m SMALLINT,
+    relative_humity_2m SMALLINT,
     apparent_temperature REAL,
     is_day SMALLINT,
     precipitation REAL,
@@ -43,4 +43,4 @@ CREATE TABLE IF NOT EXISTS bronze.meteo_paris (
     CONSTRAINT uq_meteo_measured_at UNIQUE (measured_at)
 );
 
-CREATE INDEX IF NOT EXISTS idx_meteo_measured_at ON bronze.meteo_paris BRIN (measured_at);
+CREATE INDEX IF NOT EXISTS idx_meteo_measured_at ON bronze.meteo_paris USING BRIN (measured_at);
