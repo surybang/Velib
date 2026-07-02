@@ -1,7 +1,7 @@
 [project]
-name = "ingestion"
+name = "velib-ingestion"
 version = "0.1.0"
-description = "Add your description here"
+description = "Collecte Vélib + météo vers PostgreSQL bronze"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -9,4 +9,21 @@ dependencies = [
     "httpx>=0.28.1",
     "psycopg2-binary>=2.9.12",
     "pydantic-settings>=2.14.2",
+]
+
+[project.scripts]
+velib-ingestion = "velib_ingestion.main:main"
+
+[build-system]
+requires = ["uv_build>=0.11.26,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "velib_ingestion"
+module-root = "src"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.14",
 ]

@@ -5,9 +5,9 @@ from datetime import datetime
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from config import settings
-from fetchers.meteo_fetcher import MeteoFetcher
-from fetchers.velib_fetcher import VelibFetcher
+from velib_ingestion.config import settings
+from velib_ingestion.fetchers.meteo_fetcher import MeteoFetcher
+from velib_ingestion.fetchers.velib_fetcher import VelibFetcher
 
 logging.basicConfig(
     level=logging.INFO,

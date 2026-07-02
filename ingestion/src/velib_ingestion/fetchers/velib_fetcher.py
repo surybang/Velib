@@ -16,7 +16,7 @@ import httpx
 import psycopg2
 import psycopg2.extensions
 
-from config import settings
+from velib_ingestion.config import settings
 
 logger = logging.getLogger(__name__)
 
