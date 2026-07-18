@@ -8,6 +8,7 @@ SELECT
     ebike,
     is_installed = 'OUI' AS is_installed,
     is_renting = 'OUI' AS is_renting,
+    is_returning = 'OUI' AS is_returning,
     duedate,
     lon,
     lat,
