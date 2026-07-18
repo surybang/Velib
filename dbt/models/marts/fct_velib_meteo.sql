@@ -11,10 +11,10 @@ SELECT
     mechanical,
     ebike,
 
-    (duedate AT TIME ZONE 'Europe/Paris')::TIMESTAMP AS duedate,
-    (meteo_measured_at AT TIME ZONE 'Europe/Paris')::TIMESTAMP AS meteo_measured_at,
+    duedate,
+    meteo_measured_at,
 
-    EXTRACT(HOUR FROM duedate AT TIME ZONE 'Europe/Paris')::SMALLINT AS hours_of_day,
+    EXTRACT(HOUR FROM duedate AT TIME ZONE 'Europe/Paris')::SMALLINT AS hour_of_day,
     EXTRACT(DOW FROM duedate AT TIME ZONE 'Europe/Paris')::SMALLINT AS day_of_week,
     EXTRACT(MONTH FROM duedate AT TIME ZONE 'Europe/Paris')::SMALLINT AS month,
     EXTRACT(DOW FROM duedate AT TIME ZONE 'Europe/Paris') IN (0, 6) AS is_weekend,
@@ -31,7 +31,7 @@ SELECT
     wind_speed_10m,
 
     ROUND(
-        bikes_available::numeric / NULLIF(bikes_available + docks_available, 0) * 100
+        bikes_available::numeric / NULLIF(capacity, 0) * 100
         , 2
     ) AS occupancy_rate
 
