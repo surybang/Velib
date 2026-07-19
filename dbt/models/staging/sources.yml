@@ -7,12 +7,19 @@ sources:
     tables:
       - name: velib_stations
         description: >
-          Snapshots des stations Vélib' issus de l'API Paris Open Data (norme GBFS).
+          Snapshots des stations Vélib' issus de l'API Open Data Paris (norme GBFS).
           Chaque ligne représente l'état d'une station à un instant donné.
-          Fréquence de mise à jour : ~1 minute.
+          ATTENTION : l'endpoint paginé Opendatasoft est servi depuis un cache
+          rafraîchi toutes les ~15 min. Le duedate peut donc accuser un retard
+          allant jusqu'à ce délai par rapport à l'état réel. Les requêtes ciblées
+          par stationcode ne subissent pas ce cache.
+        loaded_at_field: ingested_at
+        freshness:
+          warn_after: {count: 45, period: minute}
+          error_after: {count: 3, period: hour}
         columns:
           - name: stationcode
-            description: "Identifiant unique de la station (ex: '12007+' ou '16103')"
+            description: "Identifiant unique de la station (ex: '12007' ou '16103')"
             tests:
               - not_null
           - name: name
@@ -36,16 +43,25 @@ sources:
                   arguments:
                     values: ['OUI', 'NON']
           - name: is_renting
-            description: "Indique si la station accepte des locations : 'OUI' ou 'NON'"
+            description: "La station permet-elle d'emprunter un vélo : 'OUI' ou 'NON'"
+            tests:
+              - accepted_values:
+                  arguments:
+                    values: ['OUI', 'NON']
+          - name: is_returning
+            description: "La station accepte-t-elle les retours de vélos : 'OUI' ou 'NON'"
             tests:
               - accepted_values:
                   arguments:
                     values: ['OUI', 'NON']
           - name: duedate
             description: >
-              Horodatage de la dernière mise à jour GBFS de la station (norme GBFS).
-              Un duedate éloigné ne signifie pas une donnée manquante mais que l'état
-              de la station n'a pas changé depuis cette date.
+              Horodatage de la dernière mise à jour GBFS de la station (UTC).
+              Sujet au lag de cache décrit au niveau de la table.
+            tests:
+              - not_null
+          - name: ingested_at
+            description: "Horodatage UTC de l'insertion en base (horloge du pipeline, sans lag)"
             tests:
               - not_null
           - name: lon
@@ -60,14 +76,23 @@ sources:
       - name: meteo_paris
         description: >
           Mesures météorologiques Open-Meteo pour Paris (coordonnées fixes).
-          Fréquence : intervalles de 15 minutes.
-          Les colonnes reflètent exactement le payload JSON de l'API sans transformation.
+          Granularité native : 15 minutes. Les colonnes reflètent le payload
+          JSON de l'API sans transformation, hormis l'ajout explicite du
+          fuseau Europe/Paris à l'horodatage avant stockage en UTC.
+        loaded_at_field: ingested_at
+        freshness:
+          warn_after: {count: 45, period: minute}
+          error_after: {count: 3, period: hour}
         columns:
           - name: measured_at
             description: "Horodatage UTC de la mesure météo"
             tests:
               - not_null
               - unique
+          - name: ingested_at
+            description: "Horodatage UTC de l'insertion en base"
+            tests:
+              - not_null
           - name: temperature_2m
             description: "Température de l'air à 2 mètres du sol (°C)"
           - name: relative_humidity_2m
@@ -75,9 +100,9 @@ sources:
           - name: apparent_temperature
             description: "Température ressentie (°C), tenant compte du vent et de l'humidité"
           - name: is_day
-            description: "1 si mesure prise de jour, 0 si nuit (SMALLINT)"
+            description: "1 si mesure prise de jour, 0 si nuit (SMALLINT brut de l'API)"
           - name: precipitation
-            description: "Précipitations totales (pluie + bruine + neige) en mm"
+            description: "Précipitations totales (pluie + averses + neige) en mm"
           - name: rain
             description: "Pluie en mm"
           - name: showers

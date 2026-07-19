@@ -3,9 +3,12 @@ version: 2
 models:
   - name: fct_velib_meteo
     description: >
-      Table marts matérialisée. Une ligne = un snapshot de station Vélib' active
-      avec ses conditions météo appariées et ses features ML calculées.
-      C'est la table lue par Streamlit et utilisée pour entraîner le RandomForest.
+      Table de faits matérialisée. Une ligne = un snapshot de station Vélib' active
+      apparié à ses conditions météo, enrichi de features calendaires et de cibles.
+      C'est la table consommée par l'API FastAPI, le dashboard et l'entraînement ML.
+      Granularité : une ligne par (stationcode, duedate).
+      Convention temporelle : tous les timestamps sont en UTC (timestamptz).
+      Les features calendaires sont dérivées de l'heure locale Europe/Paris.
     columns:
       - name: stationcode
         description: "Identifiant de la station"
@@ -32,17 +35,21 @@ models:
       - name: ebike
         description: "Nombre de vélos électriques disponibles"
       - name: duedate
-        description: "Horodatage du snapshot (heure locale Paris)"
+        description: >
+          Horodatage UTC du snapshot Vélib'. Sujet au lag de cache de l'API
+          source (jusqu'à ~15 min). Pour l'horloge du pipeline, voir ingested_at.
         tests:
           - not_null
       - name: meteo_measured_at
-        description: "Horodatage de la mesure météo appariée (heure locale Paris)"
+        description: "Horodatage UTC de la mesure météo appariée (écart max ±15 min)"
+      - name: ingested_at
+        description: "Horodatage UTC de l'insertion en base, sans lag de cache"
       - name: hour_of_day
-        description: "Heure locale Paris (0–23)"
+        description: "Heure locale Paris du snapshot (0-23)"
       - name: day_of_week
-        description: "Jour de la semaine (0=dimanche, 6=samedi)"
+        description: "Jour de la semaine en heure locale Paris (0=dimanche, 6=samedi)"
       - name: month
-        description: "Mois de l'année (1–12)"
+        description: "Mois de l'année (1-12)"
       - name: is_weekend
         description: "True si samedi ou dimanche"
       - name: temperature_2m
@@ -52,7 +59,7 @@ models:
       - name: apparent_temperature
         description: "Température ressentie (°C)"
       - name: is_day
-        description: "1 si mesure de jour, 0 si nuit"
+        description: "True si la mesure a été prise de jour, False la nuit"
       - name: precipitation
         description: "Précipitations totales en mm"
       - name: rain
@@ -66,4 +73,24 @@ models:
       - name: wind_speed_10m
         description: "Vitesse du vent à 10m (km/h)"
       - name: occupancy_rate
-        description: "Taux de remplissage en vélos (bikes_available / capacity * 100), variable cible ML"
+        description: >
+          Taux de remplissage en vélos : bikes_available / capacity * 100.
+          Dénominateur volontairement basé sur la capacité théorique (stable)
+          plutôt que sur les bornettes fonctionnelles (variable).
+          Variable cible pour la régression.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
+      - name: is_empty
+        description: "True si la station n'a plus aucun vélo disponible (cible classification)"
+      - name: is_full
+        description: "True si la station n'a plus aucune bornette libre (cible classification)"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - stationcode
+              - duedate

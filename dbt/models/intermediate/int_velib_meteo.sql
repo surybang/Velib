@@ -10,6 +10,7 @@ SELECT
     v.bikes_available,
     v.mechanical,
     v.ebike,
+    v.is_returning,
     v.duedate,
     m.measured_at AS meteo_measured_at,
     m.temperature_2m,

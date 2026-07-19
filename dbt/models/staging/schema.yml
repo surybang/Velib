@@ -2,7 +2,10 @@ version: 2
 
 models:
   - name: stg_velib
-    description: "Stations Vélib' nettoyées et renommées (schéma bronze -> silver)"
+    description: >
+      Stations Vélib' nettoyées et renommées (bronze -> silver).
+      Les drapeaux OUI/NON sont convertis en booléens.
+      Aucun filtrage à ce stade : le staging reste fidèle à la source.
     columns:
       - name: stationcode
         description: "Identifiant unique de la station"
@@ -16,6 +19,12 @@ models:
           - not_null
       - name: docks_available
         description: "Nombre de bornettes libres"
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "<= capacity"
+              config:
+                where: "capacity > 0"
       - name: bikes_available
         description: "Nombre total de vélos disponibles (mécaniques + électriques)"
       - name: mechanical
@@ -23,11 +32,17 @@ models:
       - name: ebike
         description: "Nombre de vélos électriques disponibles"
       - name: is_installed
-        description: "True si la station est installée"
+        description: "True si la station est installée et en service"
       - name: is_renting
-        description: "True si la station accepte des locations"
+        description: "True si la station permet d'emprunter un vélo"
+      - name: is_returning
+        description: "True si la station accepte les retours de vélos"
       - name: duedate
-        description: "Horodatage de la dernière mise à jour GBFS de la station"
+        description: "Horodatage UTC de la dernière mise à jour GBFS de la station"
+        tests:
+          - not_null
+      - name: ingested_at
+        description: "Horodatage UTC de l'insertion en base (horloge du pipeline)"
         tests:
           - not_null
       - name: lon
@@ -38,12 +53,20 @@ models:
         description: "Nom de la commune ou de l'arrondissement parisien"
       - name: code_insee_commune
         description: "Code INSEE de la commune"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - stationcode
+              - duedate
 
   - name: stg_meteo
-    description: "Mesures météo Paris nettoyées (schéma bronze -> silver)"
+    description: >
+      Mesures météo Paris nettoyées (bronze -> silver).
+      is_day est converti en booléen, relative_humidity_2m est renommé humidity.
     columns:
       - name: measured_at
-        description: "Horodatage de la mesure météo"
+        description: "Horodatage UTC de la mesure météo"
         tests:
           - not_null
           - unique
@@ -54,7 +77,7 @@ models:
       - name: apparent_temperature
         description: "Température ressentie (°C)"
       - name: is_day
-        description: "1 si mesure de jour, 0 si nuit"
+        description: "True si la mesure a été prise de jour, False la nuit"
       - name: precipitation
         description: "Précipitations totales en mm"
       - name: rain

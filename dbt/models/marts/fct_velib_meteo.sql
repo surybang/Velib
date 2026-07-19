@@ -33,6 +33,10 @@ SELECT
     ROUND(
         bikes_available::numeric / NULLIF(capacity, 0) * 100
         , 2
-    ) AS occupancy_rate
+    ) AS occupancy_rate,
+
+    -- cibles pour plus tard sur la "prédiction de rupture"
+    bikes_available = 0 AS is_empty,
+    docks_available = 0 AS is_full
 
 FROM {{ ref('int_velib_meteo') }}

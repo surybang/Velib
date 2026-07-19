@@ -3,10 +3,11 @@ version: 2
 models:
   - name: int_velib_meteo
     description: >
-      Jointure Vélib' + météo avec appariement temporel ±15 min.
-      Chaque ligne représente un snapshot de station active avec ses conditions
-      météo les plus proches. Les stations inactives et les snapshots sans
-      correspondance météo dans la fenêtre sont exclus.
+      Jointure Vélib' + météo avec appariement temporel ±15 min via LATERAL JOIN,
+      qui retient la mesure météo la plus proche du snapshot.
+      Seules les stations actives (installées et en location) sont conservées.
+      Les snapshots sans correspondance météo dans la fenêtre sont exclus
+      (INNER JOIN), ce qui peut créer des trous si la collecte météo a décroché.
     columns:
       - name: stationcode
         description: "Identifiant de la station"
@@ -34,12 +35,16 @@ models:
         description: "Nombre de vélos mécaniques disponibles"
       - name: ebike
         description: "Nombre de vélos électriques disponibles"
+      - name: is_returning
+        description: "True si la station accepte les retours de vélos"
       - name: duedate
-        description: "Horodatage du snapshot Vélib'"
+        description: "Horodatage UTC du snapshot Vélib'"
         tests:
           - not_null
+      - name: ingested_at
+        description: "Horodatage UTC de l'insertion en base"
       - name: meteo_measured_at
-        description: "Horodatage de la mesure météo appariée (écart max ±15 min)"
+        description: "Horodatage UTC de la mesure météo appariée (écart max ±15 min)"
         tests:
           - not_null
       - name: temperature_2m
@@ -49,7 +54,7 @@ models:
       - name: apparent_temperature
         description: "Température ressentie (°C)"
       - name: is_day
-        description: "1 si mesure de jour, 0 si nuit"
+        description: "True si la mesure a été prise de jour, False la nuit"
       - name: precipitation
         description: "Précipitations totales en mm"
       - name: rain
@@ -62,3 +67,9 @@ models:
         description: "Couverture nuageuse (%)"
       - name: wind_speed_10m
         description: "Vitesse du vent à 10m (km/h)"
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - stationcode
+              - duedate
