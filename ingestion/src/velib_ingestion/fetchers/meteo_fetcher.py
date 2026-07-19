@@ -1,130 +1,84 @@
+"""Fetcher météo : API Open-Meteo -> bronze.meteo_paris.
+
+L'API renvoie un horodatage local sans suffixe de fuseau (paramètre
+timezone=Europe/Paris dans l'URL). On attache donc explicitement le fuseau
+avant insertion : sans cela, psycopg2 interpréterait la valeur naïve comme de
+l'UTC et décalerait la mesure de deux heures en été.
+
+Déduplication : contrainte uq_meteo_measured_at (measured_at).
 """
-Fetcher météo : appel API Open-Meteo -> insertion bronze.meteo_paris
 
-Flux :
-  API Open-Meteo -> extraction objet "current" -> PostgreSQL bronze
-
-L'API rafraîchit les données toutes les 15 minutes.
-La déduplication est gérée par la contrainte uq_meteo_measured_at (measured_at).
-Si on collecte toutes les 10 min, une mesure sur deux sera un doublon ignoré silencieusement.
-"""
-
-import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import httpx
-import psycopg2
-import psycopg2.extensions
+from loguru import logger
 
 from velib_ingestion.config import settings
-import time
+from velib_ingestion.db import get_connection
 
-logger = logging.getLogger(__name__)
+PARIS_TZ = ZoneInfo("Europe/Paris")
+HTTP_TIMEOUT_SECONDS = 30.0
+
+_INSERT_SQL = """
+    INSERT INTO bronze.meteo_paris (
+        measured_at, temperature_2m, relative_humidity_2m, apparent_temperature,
+        is_day, precipitation, rain, showers, snowfall, cloud_cover, wind_speed_10m
+    ) VALUES (
+        %(time)s, %(temperature_2m)s, %(relative_humidity_2m)s,
+        %(apparent_temperature)s, %(is_day)s, %(precipitation)s, %(rain)s,
+        %(showers)s, %(snowfall)s, %(cloud_cover)s, %(wind_speed_10m)s
+    )
+    ON CONFLICT ON CONSTRAINT uq_meteo_measured_at DO NOTHING
+"""
 
 
 class MeteoFetcher:
-    def __init__(self) -> None:
-        self._conn: psycopg2.extensions.connection | None = None
+    """Collecte la mesure météo courante et l'insère en bronze."""
 
-    def _get_conn(self) -> psycopg2.extensions.connection:
-        # Reconnexion transparente si la connexion a été perdue entre deux runs
-        if self._conn is None or self._conn.closed:
-            self._conn = self._connect_with_retry()
-        return self._conn
+    def run(self) -> dict[str, int]:
+        """Exécute une collecte.
 
-    def _connect_with_retry(
-        self, attempts: int = 10, delay: float = 3.0
-    ) -> psycopg2.extensions.connection:
-        for attempt in range(1, attempts + 1):
-            try:
-                conn = psycopg2.connect(
-                    host=settings.pghost,
-                    port=settings.pgport,
-                    user=settings.pguser,
-                    password=settings.pgpassword,
-                    dbname=settings.pgdatabase
-                )
-                logger.info("Connexion PostgreSQL établie (tentative %d)", attempt)
-                return conn
-            except psycopg2.OperationalError as exc:
-                logger.warning(
-                    "PostgreSQL non disponible (tentative %d/%d) : %s",
-                    attempt,
-                    attempts,
-                    exc,
-                )
-                if attempt < attempts:
-                    time.sleep(delay)
-        raise RuntimeError(
-            f"Impossible de se connecter à PostgreSQL après {attempts} tentatives"
-        )
+        Returns:
+            {"inserted": 1} si la mesure est nouvelle, {"inserted": 0} si elle
+            était déjà présente (l'API renvoie la même mesure pendant 15 min).
 
-    def run(self) -> None:
-        logger.info("Démarrage de la collecte météo…")
-        try:
-            weather = self._fetch_current_weather()
-        except Exception:
-            logger.exception("Erreur lors de la collecte météo")
-            return
+        Raises:
+            Toute exception réseau ou base est propagée.
+        """
+        logger.info("Démarrage de la collecte météo")
+        weather = self._fetch_current_weather()
 
-        if weather is None:
-            logger.warning("Réponse météo vide, rien à insérer")
-            return
+        inserted = self._insert_weather(weather)
+        if inserted:
+            logger.info("Météo insérée pour {}", weather["time"])
+        else:
+            logger.info("Météo déjà présente pour {}, ignorée", weather["time"])
+        return {"inserted": inserted}
 
-        try:
-            inserted = self._insert_weather(weather)
-            if inserted:
-                logger.info("Météo insérée pour %s", weather["time"])
-            else:
-                logger.info("Météo déjà présente pour %s (doublon ignoré)", weather["time"])
-        except Exception:
-            logger.exception("Erreur lors de l'insertion météo")
+    @staticmethod
+    def _fetch_current_weather() -> dict:
+        """Appelle l'API et normalise le payload.
 
-    def _fetch_current_weather(self) -> dict | None:
-        with httpx.Client(timeout=30.0) as client:
+        L'horodatage reçu est naïf mais exprimé en heure de Paris : on lui
+        attache le fuseau pour que la conversion vers UTC au stockage soit juste.
+        Le champ interval est une métadonnée de l'API sans intérêt métier.
+        """
+        with httpx.Client(timeout=HTTP_TIMEOUT_SECONDS) as client:
             response = client.get(settings.meteo_api_base_url)
             response.raise_for_status()
-            data = response.json()
+            payload = response.json()
 
-        current: dict = data.get("current", {})
-        if not current:
-            return None
-
-        # "interval" est une métadonnée technique (durée de la fenêtre de mesure),
-        # pas une feature utile
+        current = dict(payload["current"])
         current.pop("interval", None)
-
-        # L'API renvoie "time" en heure locale (timezone=Europe/Paris dans l'URL),
-        # sans suffixe de fuseau horaire (ex: "2026-04-07T16:15").
-        # Sans annotation explicite, psycopg2 l'insèrerait comme UTC dans TIMESTAMPTZ,
-        # ce qui décalerait l'heure de +2h à l'affichage. On attache le bon fuseau.
-        raw_time: str = current["time"]
-        current["time"] = datetime.fromisoformat(raw_time).replace(
-            tzinfo=ZoneInfo("Europe/Paris")
+        current["time"] = datetime.fromisoformat(current["time"]).replace(
+            tzinfo=PARIS_TZ
         )
         return current
 
-    def _insert_weather(self, weather: dict) -> bool:
-        """Insère une mesure météo, retourne True si insérée (False si doublon)."""
-        conn = self._get_conn()
-        with conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO bronze.meteo_paris (
-                    measured_at, temperature_2m, relative_humidity_2m,
-                    apparent_temperature, is_day, precipitation,
-                    rain, showers, snowfall, cloud_cover, wind_speed_10m
-                ) VALUES (
-                    %(time)s, %(temperature_2m)s, %(relative_humidity_2m)s,
-                    %(apparent_temperature)s, %(is_day)s, %(precipitation)s,
-                    %(rain)s, %(showers)s, %(snowfall)s, %(cloud_cover)s, %(wind_speed_10m)s
-                )
-
-                ON CONFLICT ON CONSTRAINT uq_meteo_measured_at DO NOTHING
-
-                """,
-                weather,
-            )
-            inserted = cur.rowcount > 0
-        return inserted
+    @staticmethod
+    def _insert_weather(weather: dict) -> int:
+        """Insère la mesure, retourne 1 si insérée, 0 si doublon."""
+        with get_connection() as conn, conn, conn.cursor() as cur:
+            cur.execute(_INSERT_SQL, weather)
+            return cur.rowcount
