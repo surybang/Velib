@@ -355,7 +355,6 @@ dependencies = [
     { name = "loguru" },
     { name = "psycopg2-binary" },
     { name = "pydantic-settings" },
-    { name = "respx" },
 ]
 
 [package.dev-dependencies]
@@ -372,7 +371,6 @@ requires-dist = [
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "psycopg2-binary", specifier = ">=2.9.12" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
-    { name = "respx", specifier = ">=0.23.1" },
 ]
 
 [package.metadata.requires-dev]

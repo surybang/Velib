@@ -1,6 +1,6 @@
 """Entrypoint : une collecte Vélib', puis sortie."""
 
-from velib_ingestion.entrypoints._runner import run_task
+from velib_ingestion.entrypoints.runner import run_task
 from velib_ingestion.fetchers.velib_fetcher import VelibFetcher
 
 

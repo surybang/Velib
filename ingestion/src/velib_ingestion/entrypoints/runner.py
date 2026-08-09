@@ -4,20 +4,15 @@ import sys
 from collections.abc import Callable
 
 from loguru import logger
-
 from velib_ingestion.logging_setup import setup_logging
 
 
 def run_task(name: str, task: Callable[[], dict]) -> None:
-    """Exécute une tâche et traduit son issue en code de sortie processus.
-
-    Un échec doit produire un code non nul, sans quoi l'orchestrateur
-    considérerait la tâche réussie et le trou de données passerait inaperçu.
-    """
+    """Exécute une tâche et traduit son issue en code de sortie processus."""
     setup_logging()
     try:
         result = task()
-    except Exception:
+    except Exception:  # noqa: BLE001
         logger.exception("Échec de la tâche {}", name)
         sys.exit(1)
 

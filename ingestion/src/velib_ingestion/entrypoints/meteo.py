@@ -1,6 +1,6 @@
 """Entrypoint : une collecte météo, puis sortie."""
 
-from velib_ingestion.entrypoints._runner import run_task
+from velib_ingestion.entrypoints.runner import run_task
 from velib_ingestion.fetchers.meteo_fetcher import MeteoFetcher
 
 
