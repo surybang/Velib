@@ -13,6 +13,4 @@ with DAG(
         name="hello-pod",
         image="busybox",
         cmds=["sh", "-c", "echo ok"],
-        in_cluster=True,
-        get_logs=True,
     )
