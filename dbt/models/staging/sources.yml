@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: bronze
     schema: bronze
-    description: "Données brutes telles que reçues des API (jamais modifiées)"
+    description: "Données brutes telles que reçues des API"
     tables:
       - name: velib_stations
         description: >
