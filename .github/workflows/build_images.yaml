@@ -1,0 +1,34 @@
+# .github/workflows/build-images.yml
+name: build-images
+on:
+  push:
+    branches: [main]
+    paths: ["ingestion/**", "dbt/**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: ingestion
+            image: velib-ingestion
+          - service: dbt
+            image: velib-dbt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/surybang/${{ matrix.image }}:latest
+            ghcr.io/surybang/${{ matrix.image }}:${{ github.sha }}
