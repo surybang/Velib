@@ -7,29 +7,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# On épingle la version d'uv pour des builds reproductibles
+# uv épinglé pour des builds reproductibles
 COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /uvx /bin/
 
-# Configuration uv
 ENV UV_NO_DEV=1
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_PYTHON_DOWNLOADS=auto
 ENV UV_LINK_MODE=copy
+# Logs structurés en conteneur
+ENV JSON_LOGS=true
 
-# Utilisateur non-root
 RUN groupadd --system app && useradd --system --gid app --no-create-home app
 
-# Deps seules d'abord : ne casse le cache que si pyproject/lock changent
-COPY pyproject.toml uv.lock ./
+# Deps seules d'abord (cache cassé seulement si pyproject/lock changent)
+COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-install-project --no-dev
 
 # Puis le code
-COPY . .
+COPY src ./src
 RUN uv sync --frozen --no-dev
 
-# On donne la main à l'utilisateur non-root sur /app
+# Les entrypoints déclarés dans [project.scripts] sont installés dans le venv.
+# On les met sur le PATH pour qu'ils soient appelables par nom.
+ENV PATH="/app/.venv/bin:$PATH"
+
 RUN chown -R app:app /app
 USER app
 
-# On lance main.py via uv
-CMD ["uv", "run", "main.py"]
+# pas de CMD : la commande est instruite dans le DAG Airflowr
+# (cmds=["ingest-velib"] ou cmds=["ingest-meteo"] dans le KubernetesPodOperator)
