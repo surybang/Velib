@@ -1,16 +1,13 @@
-from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
-import pendulum
 
-with DAG(
-    dag_id="test_pod_permissions",
-    schedule=None,          # déclenché à la main
-    start_date=pendulum.datetime(2026, 8, 1, tz="Europe/Paris"),
-    catchup=False,
-) as dag:
-    KubernetesPodOperator(
-        task_id="hello",
-        name="hello-pod",
-        image="busybox",
-        cmds=["sh", "-c", "echo ok"],
-    )
+k = KubernetesPodOperator(
+    name="hello-dry-run",
+    image="debian",
+    cmds=["bash", "-cx"],
+    arguments=["echo", "10"],
+    labels={"foo": "bar"},
+    task_id="dry_run_demo",
+    do_xcom_push=True,
+)
+
+k.dry_run()
