@@ -80,7 +80,12 @@ with DAG(
 
     dbt_run = pod_task("dbt_run", "velib-dbt", ["dbt", "run"])
     dbt_test = pod_task("dbt_test", "velib-dbt", ["dbt", "test"])
+    dbt_freshness = pod_task(
+        "dbt_freshness",
+        "velib_dbt",
+        ["dbt", "source", "freshness"]
+    )
 
     # Collectes indépendantes en parallèle ; dbt ne démarre que si les deux
     # ont réussi ; les tests suivent le run.
-    [ingest_velib, ingest_meteo] >> dbt_run >> dbt_test
+    [ingest_velib, ingest_meteo] >> dbt_freshness >> dbt_run >> dbt_test
