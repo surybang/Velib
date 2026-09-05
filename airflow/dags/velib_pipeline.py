@@ -82,7 +82,7 @@ with DAG(
     dbt_test = pod_task("dbt_test", "velib-dbt", ["dbt", "test"])
     dbt_freshness = pod_task(
         "dbt_freshness",
-        "velib_dbt",
+        "velib-dbt",
         ["dbt", "source", "freshness"]
     )
 
