@@ -16,3 +16,6 @@ extended_capitalisation_policy = lower
 
 [sqlfluff:rules:capitalisation.types]
 capitalisation_policy = upper
+
+[sqlfluff:rules:layout.commas]
+comma_style = leading

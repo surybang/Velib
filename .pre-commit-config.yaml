@@ -20,7 +20,7 @@ repos:
   - repo: https://github.com/sqlfluff/sqlfluff
     rev: 3.3.0
     hooks:
-      - id: sqlfluff-lint
+      - id: sqlfluff-fix
         args: [--dialect, postgres]
         files: ^dbt/models/
         additional_dependencies:
