@@ -12,7 +12,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /uvx /bin/
 
 ENV UV_NO_DEV=1
 ENV UV_COMPILE_BYTECODE=1
-ENV UV_PYTHON_DOWNLOADS=auto
+ENV UV_PYTHON_DOWNLOADS=never
 ENV UV_LINK_MODE=copy
 # Logs structurés en conteneur
 ENV JSON_LOGS=true
