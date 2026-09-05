@@ -74,10 +74,11 @@ models:
         description: "Vitesse du vent à 10m (km/h)"
       - name: occupancy_rate
         description: >
-          Taux de remplissage en vélos : bikes_available / capacity * 100.
-          Dénominateur volontairement basé sur la capacité théorique (stable)
-          plutôt que sur les bornettes fonctionnelles (variable).
-          Variable cible pour la régression.
+          Taux de remplissage en vélos : bikes_available / capacity * 100,
+          plafonné à 100. Certaines stations ont une capacité mal déclarée
+          dans l'API source (ex: station 15056 Place Balard, capacity=22
+          alors qu'elle accueille régulièrement 40+ vélos). Le plafonnement
+          évite de propager cette anomalie vers les couches ML.
         tests:
           - dbt_utils.accepted_range:
               arguments:

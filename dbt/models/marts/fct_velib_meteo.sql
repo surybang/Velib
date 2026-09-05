@@ -10,15 +10,13 @@ SELECT
     bikes_available,
     mechanical,
     ebike,
-
     duedate,
     meteo_measured_at,
-
+    ingested_at,
     EXTRACT(HOUR FROM duedate AT TIME ZONE 'Europe/Paris')::SMALLINT AS hour_of_day,
     EXTRACT(DOW FROM duedate AT TIME ZONE 'Europe/Paris')::SMALLINT AS day_of_week,
     EXTRACT(MONTH FROM duedate AT TIME ZONE 'Europe/Paris')::SMALLINT AS month,
     EXTRACT(DOW FROM duedate AT TIME ZONE 'Europe/Paris') IN (0, 6) AS is_weekend,
-
     temperature_2m,
     humidity,
     apparent_temperature,
@@ -29,13 +27,13 @@ SELECT
     snowfall,
     cloud_cover,
     wind_speed_10m,
-
-    ROUND(
-        bikes_available::numeric / NULLIF(capacity, 0) * 100
-        , 2
+    LEAST(
+        ROUND(
+            bikes_available::NUMERIC / NULLIF(capacity, 0) * 100,
+            2
+        ),
+        100
     ) AS occupancy_rate,
-
-    -- cibles pour plus tard sur la "prédiction de rupture"
     bikes_available = 0 AS is_empty,
     docks_available = 0 AS is_full
 

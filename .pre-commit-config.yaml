@@ -21,6 +21,7 @@ repos:
     rev: 3.3.0
     hooks:
       - id: sqlfluff-lint
+        args: [--dialect, postgres]
         files: ^dbt/models/
         additional_dependencies:
           - dbt-postgres==1.9.0
