@@ -23,6 +23,7 @@ RUN uv sync --frozen --no-install-project --no-dev
 
 COPY . .
 RUN uv sync --frozen --no-dev
+RUN dbt deps --project-dir /app
 
 RUN chown -R app:app /app
 USER app
