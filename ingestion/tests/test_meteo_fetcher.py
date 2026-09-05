@@ -6,9 +6,12 @@ comme UTC, décalant la mesure de 2h en été. Ces tests vérifient que ce n'est
 pas le cas.
 """
 
+from datetime import UTC
+
 import httpx
 import pytest
 import respx
+
 from velib_ingestion.config import settings
 from velib_ingestion.fetchers.meteo_fetcher import MeteoFetcher
 
@@ -63,9 +66,7 @@ def test_conserve_les_mesures(meteo_payload):
 @respx.mock
 def test_propage_erreur_http(meteo_payload):
     """Une erreur réseau doit remonter pour que l'orchestrateur voie l'échec."""
-    respx.get(settings.meteo_api_base_url).mock(
-        return_value=httpx.Response(503)
-    )
+    respx.get(settings.meteo_api_base_url).mock(return_value=httpx.Response(503))
 
     with pytest.raises(httpx.HTTPStatusError):
         MeteoFetcher._fetch_current_weather()
@@ -84,7 +85,7 @@ def test_horodatage_correct_en_utc(meteo_payload):
 
     weather = MeteoFetcher._fetch_current_weather()
 
-    from datetime import timezone
-    utc_time = weather["time"].astimezone(timezone.utc)
+
+    utc_time = weather["time"].astimezone(UTC)
     assert utc_time.hour == 19
     assert utc_time.minute == 45

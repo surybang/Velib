@@ -4,6 +4,7 @@ import sys
 from collections.abc import Callable
 
 from loguru import logger
+
 from velib_ingestion.logging_setup import setup_logging
 
 

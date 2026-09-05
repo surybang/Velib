@@ -56,7 +56,7 @@ def meteo_payload() -> dict:
     return {
         "current": {
             "time": "2026-07-02T21:45",  # naïf, heure de Paris
-            "interval": 900,             # métadonnée à retirer
+            "interval": 900,  # métadonnée à retirer
             "temperature_2m": 22.4,
             "relative_humidity_2m": 55,
             "apparent_temperature": 21.7,

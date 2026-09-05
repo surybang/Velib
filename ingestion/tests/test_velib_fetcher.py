@@ -8,6 +8,7 @@ méthodes qui ne font pas d'I/O base).
 import httpx
 import pytest
 import respx
+
 from velib_ingestion.config import settings
 from velib_ingestion.fetchers.velib_fetcher import VelibFetcher
 
@@ -104,9 +105,7 @@ def test_pagination_sarrete_sur_page_vide(velib_record):
 @respx.mock
 def test_pagination_propage_erreur_http():
     """Une erreur HTTP doit remonter pour que l'orchestrateur voie l'échec."""
-    respx.get(settings.velib_api_base_url).mock(
-        return_value=httpx.Response(503)
-    )
+    respx.get(settings.velib_api_base_url).mock(return_value=httpx.Response(503))
 
     with pytest.raises(httpx.HTTPStatusError):
         VelibFetcher()._fetch_all_stations()
