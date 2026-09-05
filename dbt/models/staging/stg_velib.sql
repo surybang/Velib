@@ -10,6 +10,7 @@ SELECT
     is_renting = 'OUI' AS is_renting,
     is_returning = 'OUI' AS is_returning,
     duedate,
+    ingested_at,
     lon,
     lat,
     nom_arrondissement_communes AS commune,

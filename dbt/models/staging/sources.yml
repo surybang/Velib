@@ -13,10 +13,11 @@ sources:
           rafraîchi toutes les ~15 min. Le duedate peut donc accuser un retard
           allant jusqu'à ce délai par rapport à l'état réel. Les requêtes ciblées
           par stationcode ne subissent pas ce cache.
-        loaded_at_field: ingested_at
-        freshness:
-          warn_after: {count: 45, period: minute}
-          error_after: {count: 3, period: hour}
+        config:
+          loaded_at_field: ingested_at
+          freshness:
+            warn_after: {count: 45, period: minute}
+            error_after: {count: 3, period: hour}
         columns:
           - name: stationcode
             description: "Identifiant unique de la station (ex: '12007' ou '16103')"
@@ -79,10 +80,11 @@ sources:
           Granularité native : 15 minutes. Les colonnes reflètent le payload
           JSON de l'API sans transformation, hormis l'ajout explicite du
           fuseau Europe/Paris à l'horodatage avant stockage en UTC.
-        loaded_at_field: ingested_at
-        freshness:
-          warn_after: {count: 45, period: minute}
-          error_after: {count: 3, period: hour}
+        config:
+          loaded_at_field: ingested_at
+          freshness:
+            warn_after: {count: 45, period: minute}
+            error_after: {count: 3, period: hour}
         columns:
           - name: measured_at
             description: "Horodatage UTC de la mesure météo"
