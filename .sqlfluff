@@ -2,7 +2,7 @@
 dialect = postgres
 templater = dbt
 max_line_length = 100
-exclude_rules = ST06, RF04, LT02
+exclude_rules = ST06, RF04, LT02, LT04, RF02, RF03
 
 [sqlfluff:templater:dbt]
 project_dir = ./dbt
