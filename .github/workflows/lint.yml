@@ -1,0 +1,26 @@
+name: lint_and_format
+on:
+  push:
+    branches: [main]
+    paths: ["ingestion/**"]
+  pull_request:
+    paths: ["ingestion/**"]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ingestion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+
+      - name: ruff lint
+        run: uv run ruff check src tests
+
+      - name: ruff format check
+        run: uv run ruff format --check src tests
+
+      - name: pytest
+        run: uv run pytest -v
