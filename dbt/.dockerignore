@@ -1,0 +1,20 @@
+# Environnement et caches
+.venv/
+__pycache__/
+*.pyc
+
+# Artefacts dbt (régénérés dans l'image par dbt deps)
+dbt_packages/
+target/
+logs/
+dbt.log
+
+# Git et CI
+.git/
+.github/
+
+# Divers
+.env
+Dockerfile
+.dockerignore
+README.md
