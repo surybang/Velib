@@ -85,7 +85,6 @@ def test_horodatage_correct_en_utc(meteo_payload):
 
     weather = MeteoFetcher._fetch_current_weather()
 
-
     utc_time = weather["time"].astimezone(UTC)
     assert utc_time.hour == 19
     assert utc_time.minute == 45
