@@ -1,121 +1,94 @@
-# Service `dbt` — Transformation Vélib'
+# Service `dbt`
 
-Transforme les données brutes collectées par le service `ingestion` en une
-table de faits exploitable pour l'analyse et le ML.
+Transforme les données brutes de la couche bronze en une table de faits,
+`gold.fct_velib_meteo`, qui joint chaque snapshot de station à la mesure météo
+la plus proche et ajoute les features calendaires.
 
-## Architecture médaillon
+## Lignage
 
 ```
-bronze.velib_stations  ──> stg_velib  ──┐
-                                        ├──> int_velib_meteo ──> fct_velib_meteo
-bronze.meteo_paris     ──> stg_meteo  ──┘
+bronze.velib_stations ──> stg_velib ──┐
+                                      ├──> int_velib_meteo ──> fct_velib_meteo
+bronze.meteo_paris    ──> stg_meteo ──┘
 ```
 
-| Couche | Schéma | Type | Rôle |
+| Couche | Schéma | Matérialisation | Ce qu'elle fait |
 |---|---|---|---|
-| Staging | `silver` | vue | Renommage, typage, drapeaux OUI/NON → booléens |
-| Intermediate | `silver` | vue | Jointure Vélib × météo via LATERAL JOIN ±15 min |
-| Marts | `gold` | table matérialisée | Features calendaires, cibles ML, table servie |
+| Sources | `bronze` | tables | Données brutes écrites par `ingestion/` |
+| Staging | `silver` | vues | Renommage, typage, `OUI`/`NON` en booléens |
+| Intermediate | `silver` | vue | Jointure Vélib' × météo, filtre des stations inactives |
+| Marts | `gold` | table | Features calendaires, `occupancy_rate`, cibles `is_empty` et `is_full` |
 
-La table de faits `gold.fct_velib_meteo` est l'unique point de sortie.
-Elle est reconstruite à chaque `dbt run`.
+Les vues se recalculent à chaque lecture. La table gold est reconstruite à chaque
+`dbt run`, ce qui prend environ une seconde sur 150 000 lignes.
 
-## Prérequis
-
-Variables d'environnement requises (lues via `profiles.yml`) :
-
-```
-PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
-```
-
-En local, les poser dans un `.env` à la racine du repo et les exporter.
-En prod, elles sont injectées depuis le Secret Kubernetes `velib-postgres-credentials`.
-
-## Installation et utilisation
+## Utilisation
 
 ```bash
-cd dbt
 uv sync
-
-# À lancer une fois après le clone, ou après modification de packages.yml
-# Télécharge dbt_utils dans dbt_packages/ (non versionné)
-uv run dbt deps
-
-# Vérifier la connexion et la config
-uv run dbt debug
-
-# Vérifier que les sources sont fraîches (collecte en cours)
-uv run dbt source freshness
-
-# Construire les modèles
+uv run dbt deps              # une fois, ou après modification de packages.yml
+uv run dbt debug             # vérifie la connexion
+uv run dbt source freshness  # la collecte a-t-elle décroché ?
 uv run dbt run
-
-# Lancer les tests
-uv run dbt test
-
-# Analyser les trous de collecte
-uv run dbt show --select analyses_gap --limit 20
+uv run dbt test              # 27 tests
 ```
 
-## Packages
+Les identifiants viennent de l'environnement via `profiles.yml` :
+`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`.
 
-`dbt_utils` (dbt-labs) fournit les macros de test :
-`unique_combination_of_columns`, `accepted_range`, `expression_is_true`.
-
-Le dossier `dbt_packages/` est ignoré par git. Il est recréé par `dbt deps`
-et installé dans l'image Docker via `RUN dbt deps --project-dir /app`.
+`dbt_packages/` est ignoré par git. `dbt deps` le régénère localement et le
+Dockerfile le régénère dans l'image.
 
 ## Décisions de modélisation
 
-### Jointure Vélib × météo
+**Jointure par LATERAL.** Les deux flux ont une granularité de 15 minutes mais
+pas la même horloge. Un `LATERAL JOIN` avec fenêtre de ±15 minutes retient pour
+chaque snapshot la mesure météo la plus proche, sans supposer que les deux
+tombent à la même minute.
 
-Les deux flux ont une granularité de 15 min mais ne sont pas alignés sur la
-même horloge. Un `LATERAL JOIN` avec fenêtre ±15 min retient la mesure météo
-la plus proche de chaque snapshot, sans dépendre d'une coïncidence
-d'horodatage.
+**Tout reste en UTC.** Les colonnes `duedate`, `meteo_measured_at` et
+`ingested_at` sont des `timestamptz`. Les features calendaires (`hour_of_day`,
+`day_of_week`, `is_weekend`) sont calculées avec `AT TIME ZONE 'Europe/Paris'`
+mais les timestamps eux-mêmes ne sont jamais convertis en base. Une version
+précédente castait en `::TIMESTAMP` après conversion, ce qui produisait des
+timestamps naïfs réinterprétés en UTC lors de comparaisons avec `NOW()`. Deux
+heures de décalage silencieux en été.
 
-### Convention temporelle
+**`duedate` pour la jointure, `ingested_at` pour la freshness.** `duedate` est
+l'horodatage métier de l'API. Il subit un cache de 15 minutes mais reste l'axe
+correct pour joindre avec la météo. `ingested_at` est l'horloge du pipeline et
+sert uniquement à `dbt source freshness`, qui alerte si aucune ligne n'a été
+insérée depuis 45 minutes.
 
-Tous les timestamps sont stockés en UTC (`timestamptz`). La conversion en
-heure de Paris n'a lieu qu'à l'affichage ou pour dériver les features
-calendaires (`hour_of_day`, `day_of_week`, `month`, `is_weekend`).
+**`occupancy_rate` plafonné à 100.** La station 15056 (Place Balard) déclare
+`capacity = 22` mais accueille jusqu'à 42 vélos, soit un taux de 190 %. Le
+`LEAST(..., 100)` empêche cette anomalie de métadonnée de contaminer
+l'entraînement d'un modèle.
 
-### `duedate` vs `ingested_at`
+**Dénominateur sur `capacity`, pas sur `bikes + docks`.** Le second varie quand
+des bornettes tombent en panne, ce qui injecterait du bruit d'équipement dans une
+variable cible. La capacité théorique est stable par station.
 
-`duedate` est l'horodatage API, soumis au cache Opendatasoft (~15 min de
-retard possible). Il sert à la jointure métier et à l'analyse temporelle.
+**Granularité verrouillée.** `unique_combination_of_columns` sur
+`(stationcode, duedate)` à chaque couche. Un doublon d'ingestion serait détecté
+au premier `dbt test`.
 
-`ingested_at` est l'horloge du pipeline (posée par PostgreSQL à l'insertion).
-Elle sert uniquement à la freshness dbt, qui surveille la santé de la
-collecte, pas l'état des données.
-
-### `occupancy_rate`
-
-Calculé comme `bikes_available / capacity * 100`, plafonné à 100 via `LEAST`.
-La station 15056 (Place Balard) a une `capacity` mal déclarée (22) mais
-accueille régulièrement 40+ vélos, produisant des taux jusqu'à 190%.
-Le plafonnement évite de propager cette anomalie vers les couches ML.
-
-### Granularité garantie par test
-
-`unique_combination_of_columns` sur `(stationcode, duedate)` vérifie à chaque
-couche qu'une ligne représente bien un snapshot de station.
-
-## Analyse des trous de collecte
-
-`analyses/analyses_gap.sql` identifie les pauses de collecte en calculant
-l'écart entre snapshots successifs, basé sur `ingested_at`.
+## Diagnostiquer les trous de collecte
 
 ```bash
 uv run dbt show --select analyses_gap --limit 20
 ```
 
-## Qualité du code SQL
+`analyses/analyses_gap.sql` calcule l'écart entre snapshots successifs sur
+`ingested_at` et liste les pauses de plus de 20 minutes. Les analyses dbt sont
+compilées mais jamais matérialisées, ce qui permet de versionner une requête de
+diagnostic avec le templating `ref()` et `source()` sans créer d'objet en base.
 
-sqlfluff est configuré dans `.sqlfluff` à la racine du repo.
-Lancé automatiquement par prek au commit.
+## Lint SQL
 
-```bash
-uv run sqlfluff lint models/
-uv run sqlfluff fix models/
-```
+sqlfluff tourne au commit via prek, avec la config dans `.sqlfluff` à la racine.
+Virgules en début de ligne, mots-clés en majuscules, 100 caractères max.
+
+Les règles `ST06`, `RF04`, `LT02`, `LT04`, `RF02`, `RF03` et `AL01` sont
+exclues. La plupart donnent des faux positifs sur le `LATERAL JOIN` avec le
+templater dbt.

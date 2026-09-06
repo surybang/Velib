@@ -21,7 +21,7 @@ Images     : ghcr.io/surybang/velib-ingestion et velib-dbt
 
 - Avoir un VSCode **admin** depuis le catalogue Onyxia
 - Avoir des identifiants Kubernetes frais (Mon compte → Connexion cluster,
-  valables `?` jours)
+  valables 2 jours)
 - Vérifier les droits :
 
 ```bash
@@ -31,7 +31,6 @@ kubectl auth can-i create rolebindings
 # Les trois doivent répondre yes
 ```
 
----
 
 ## Mise en route initiale
 
@@ -128,12 +127,12 @@ kubectl get role,rolebinding,secret,configmap -n user-fabienhos \
 # 4 lignes attendues
 ```
 
-### 8. Tester avec le DAG busybox
+### 8. Vérifier que le worker peut créer un pod
 
-Dans l'UI Airflow, déclencher `test_pod_permissions` manuellement.
-S'il passe vert, le PodOperator fonctionne.
+Déclencher `velib_pipeline` manuellement dans l'UI Airflow. Si `ingest_velib`
+passe vert, le PodOperator fonctionne. S'il échoue avec
+`Service token file does not exist`, reprendre l'étape 4.
 
----
 
 ## Après une coupure (checklist rapide)
 
@@ -160,7 +159,6 @@ kubectl get role,rolebinding,secret,configmap -n user-fabienhos \
   | grep -E "airflow-pod-launcher|velib-postgres|velib-config"
 ```
 
----
 
 ## Contexte et limites
 
@@ -178,12 +176,11 @@ nommé dont le numéro change à chaque relance.
 qui fixent `automountServiceAccountToken: true` et un ServiceAccount dédié,
 hors du catalogue managé.
 
----
 
 ## Diagnostiquer les trous de collecte
 
 ```bash
-cd ~/work/Velib/dbt
+cd dbt
 uv run dbt show --select analyses_gap --limit 10
 ```
 
