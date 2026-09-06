@@ -1,0 +1,20 @@
+# Environnements et caches Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Git et CI
+.git/
+.github/
+.pre-commit-config.yaml
+
+# Divers
+tmp/
+.cache/
+.env
+Dockerfile
+.dockerignore
+README.md
