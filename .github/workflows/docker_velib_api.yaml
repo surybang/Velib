@@ -1,0 +1,118 @@
+name: Docker API
+
+on:
+  push:
+    branches: [main]
+    paths: ["app/velib_api/**"]
+  workflow_dispatch:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+
+    # PostgreSQL de test : le conteneur API a besoin d'une base pour démarrer.
+    # On en lance une jetable, on y crée le schéma minimal, et l'API s'y connecte.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: velib
+          POSTGRES_PASSWORD: velib
+          POSTGRES_DB: velib_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: 📦 Cloner le dépôt
+        uses: actions/checkout@v4
+
+      - name: 🗄️ Créer le schéma gold minimal
+        # L'API lit gold.fct_velib_meteo. On crée une table vide avec les
+        # colonnes qu'interrogent les endpoints, pour que /v1/city/stats et
+        # /v1/map répondent sans planter (résultat vide, mais 200 OK).
+        run: |
+          PGPASSWORD=velib psql -h localhost -U velib -d velib_test <<'SQL'
+          CREATE SCHEMA IF NOT EXISTS gold;
+          CREATE TABLE gold.fct_velib_meteo (
+              stationcode text,
+              station_name text,
+              commune text,
+              lat double precision,
+              lon double precision,
+              capacity int,
+              bikes_available int,
+              docks_available int,
+              mechanical int,
+              ebike int,
+              occupancy_rate numeric,
+              is_empty boolean,
+              is_full boolean,
+              temperature_2m numeric,
+              precipitation numeric,
+              wind_speed_10m numeric,
+              duedate timestamptz,
+              ingested_at timestamptz
+          );
+          SQL
+
+      - name: 🔐 Connexion à ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏗️ Build et push de l'image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app/velib_api
+          push: true
+          tags: ghcr.io/surybang/velib-api:latest
+
+      - name: 🚀 Démarrer le conteneur
+        # --network host pour joindre le postgres du service sur localhost:5432
+        run: |
+          docker run -d --name velib-api \
+            --network host \
+            -e PGHOST=localhost \
+            -e PGPORT=5432 \
+            -e PGDATABASE=velib_test \
+            -e PGUSER=velib \
+            -e PGPASSWORD=velib \
+            ghcr.io/surybang/velib-api:latest
+
+      - name: ⏳ Attendre que l'API réponde
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/v1/health; then
+              echo ""
+              echo "L'API répond !"
+              exit 0
+            fi
+            echo "Tentative $i : l'API ne répond pas encore..."
+            sleep 2
+          done
+          echo "Tout est chaos"
+          docker logs velib-api
+          exit 1
+
+      - name: 🔎 Vérifier un endpoint de données
+        # Smoke test plus poussé : /v1/city/stats doit renvoyer 200,
+        # même avec une table vide (les agrégats renvoient des NULL/0).
+        run: |
+          curl -sf http://localhost:8000/v1/city/stats || {
+            echo "L'endpoint city/stats a échoué"
+            docker logs velib-api
+            exit 1
+          }
+          echo ""
+          echo "Endpoint de données OK"
+
+      - name: 🧹 Nettoyage
+        if: always()
+        run: docker rm -f velib-api
