@@ -17,4 +17,3 @@ dbt.log
 .env
 Dockerfile
 .dockerignore
-README.md
