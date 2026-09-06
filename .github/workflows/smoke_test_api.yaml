@@ -1,4 +1,8 @@
-name: Docker API
+name: smoke-test-api
+
+# Vérifie que l'image API démarre et répond, avec un PostgreSQL jetable.
+# Ne teste pas le bout-en-bout avec les vraies données (base Onyxia
+# inaccessible depuis la CI), seulement que le conteneur est valide.
 
 on:
   push:
@@ -7,11 +11,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-verify:
+  smoke-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
-    # PostgreSQL de test : le conteneur API a besoin d'une base pour démarrer.
-    # On en lance une jetable, on y crée le schéma minimal, et l'API s'y connecte.
     services:
       postgres:
         image: postgres:17
@@ -28,13 +33,9 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: 📦 Cloner le dépôt
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: 🗄️ Créer le schéma gold minimal
-        # L'API lit gold.fct_velib_meteo. On crée une table vide avec les
-        # colonnes qu'interrogent les endpoints, pour que /v1/city/stats et
-        # /v1/map répondent sans planter (résultat vide, mais 200 OK).
         run: |
           PGPASSWORD=velib psql -h localhost -U velib -d velib_test <<'SQL'
           CREATE SCHEMA IF NOT EXISTS gold;
@@ -60,22 +61,20 @@ jobs:
           );
           SQL
 
-      - name: 🔐 Connexion à ghcr.io
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 🏗️ Build et push de l'image
+      - name: 🏗️ Build de l'image
         uses: docker/build-push-action@v6
         with:
           context: ./app/velib_api
-          push: true
-          tags: ghcr.io/surybang/velib-api:latest
+          load: true
+          tags: velib-api:test
 
       - name: 🚀 Démarrer le conteneur
-        # --network host pour joindre le postgres du service sur localhost:5432
         run: |
           docker run -d --name velib-api \
             --network host \
@@ -84,7 +83,7 @@ jobs:
             -e PGDATABASE=velib_test \
             -e PGUSER=velib \
             -e PGPASSWORD=velib \
-            ghcr.io/surybang/velib-api:latest
+            velib-api:test
 
       - name: ⏳ Attendre que l'API réponde
         run: |
@@ -102,8 +101,6 @@ jobs:
           exit 1
 
       - name: 🔎 Vérifier un endpoint de données
-        # Smoke test plus poussé : /v1/city/stats doit renvoyer 200,
-        # même avec une table vide (les agrégats renvoient des NULL/0).
         run: |
           curl -sf http://localhost:8000/v1/city/stats || {
             echo "L'endpoint city/stats a échoué"
